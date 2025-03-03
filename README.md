@@ -1,3 +1,3 @@
 # gym-database-system
 
-This project aims to track and organize clients, trainers, training sessions, as well as memberships and transactions.
+Gym Database System is a comprehensive management solution designed to streamline gym operations. It efficiently handles member registrations, attendance tracking, subscription plans, trainer schedules, workout routines, and payment records. The system ensures easy access to data, improves organization, and enhances overall efficiency.
