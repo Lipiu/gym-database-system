@@ -209,3 +209,83 @@ FROM MEMBERS_OF_GYM m
 JOIN SUBSCRIPTION s ON m.SubscriptionID = s.SubscriptionID;
 
 
+----------------------------------
+
+-- PL/SQL part
+
+-- A. Interaction with the Oracle server through SQL commands (DDL and DML) in PL/SQL
+-- blocks: using execute immediate, particularities regarding the use of the select 
+DECLARE
+v_count NUMBER;
+BEGIN
+-- count how many members are subscribed to planID 101
+SELECT COUNT(*) INTO v_count
+FROM members_of_gym
+WHERE SubscriptionID = 101;
+dbms_output.put_line('Number of members with subscription id = 101: ' || v_count);
+END;
+/
+
+-- B. Alternative and repetitive structures (IF, CASE, FOR, LOOP, WHILE).
+-- prompt the user to enter a subscription type and display the price
+DECLARE
+v_plan VARCHAR(20) := '&Enter_plan_name';
+BEGIN
+CASE v_plan
+WHEN 'Basic' THEN
+dbms_output.put_line('Cost is 50$');
+WHEN 'Premium' THEN
+dbms_output.put_line('Cost is 100$');
+ELSE
+dbms_output.put_line('Unknown subscription');
+END CASE;
+END;
+/
+
+-- check if a member's subscription is basic or premium
+DECLARE
+  v_member_id MEMBERS_OF_GYM.MemberID%TYPE := 12;
+  v_plan_name SUBSCRIPTION.PlanName%TYPE;
+BEGIN
+SELECT s.PlanName
+INTO v_plan_name
+FROM MEMBERS_OF_GYM m
+JOIN SUBSCRIPTION s ON m.SubscriptionID = s.SubscriptionID
+WHERE m.MemberID = v_member_id;
+IF v_plan_name = 'Premium Plan' THEN
+DBMS_OUTPUT.PUT_LINE('Member ' || v_member_id || ' has a Premium subscription.');
+ELSE
+DBMS_OUTPUT.PUT_LINE('Member ' || v_member_id || ' has a Basic subscription.');
+END IF;
+END;
+
+-- display a message based on equipment availability
+DECLARE
+v_equipment_name EQUIPMENT.EquipmentName%TYPE := 'Treadmill';
+BEGIN
+CASE v_equipment_name
+WHEN 'Treadmill' THEN
+DBMS_OUTPUT.PUT_LINE('Cardio equipment available.');
+WHEN 'Dumbbells' THEN
+DBMS_OUTPUT.PUT_LINE('Strength training equipment available.');
+ELSE
+DBMS_OUTPUT.PUT_LINE('Equipment type unknown or not available.');
+END CASE;
+END;
+/
+
+-- display all members and their subscription plans
+BEGIN
+FOR rec IN (
+SELECT m.FullName, s.PlanName
+FROM MEMBERS_OF_GYM m
+JOIN SUBSCRIPTION s ON m.SubscriptionID = s.SubscriptionID
+)
+LOOP
+DBMS_OUTPUT.PUT_LINE('Member: ' || rec.FullName || ' - Plan: ' || rec.PlanName);
+END LOOP;
+END;
+
+----------------------------------
+
+-- C. Data collections (index by table, nested table, varray).
