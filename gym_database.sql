@@ -289,3 +289,49 @@ END;
 ----------------------------------
 
 -- C. Data collections (index by table, nested table, varray).
+DECLARE
+TYPE EquipmentTable IS TABLE OF VARCHAR2(50) INDEX BY PLS_INTEGER;
+v_equipment EquipmentTable;
+i PLS_INTEGER := 0;
+BEGIN
+FOR rec IN (SELECT EquipmentName FROM EQUIPMENT ORDER BY EquipmentID) LOOP
+i := i + 1;
+v_equipment(i) := rec.EquipmentName;
+END LOOP;
+
+i := v_equipment.FIRST;
+WHILE i IS NOT NULL LOOP
+DBMS_OUTPUT.PUT_LINE('Equipment ' || i || ': ' || v_equipment(i));
+i := v_equipment.NEXT(i);
+END LOOP;
+END;
+/
+
+-- mai trebuie sa fac cateva la C
+
+-- D. Exception handling (minimum 3 implicit, 2 explicit).
+-- implicit
+DECLARE
+v_name EQUIPMENT.EquipmentName%TYPE;
+BEGIN
+SELECT EquipmentName INTO v_name FROM EQUIPMENT
+WHERE EquipmentID = 9999; -- testing for an id that does not exist
+dbms_output.put_line('Equipment: ' || v_name);
+EXCEPTION
+WHEN NO_DATA_FOUND THEN
+dbms_output.put_line('No equipment found with that specified ID!');
+END;
+/
+
+DECLARE
+v_name EQUIPMENT.EquipmentName%TYPE;
+BEGIN
+SELECT EquipmentName into v_name FROM EQUIPMENT; -- here the program will return multiple rows because of no WHERE clause
+dbms_output.put_line('Equipment: ' || v_name);
+EXCEPTION
+WHEN TOO_MANY_ROWS THEN
+dbms_output.put_line('Too many rows returned!');
+END;
+/
+
+-- explicit
