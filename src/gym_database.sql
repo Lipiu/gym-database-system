@@ -642,4 +642,66 @@ SELECT get_member_age(1) AS age FROM DUAL;
 
 SELECT memberid, FULLNAME, dateofbirth FROM MEMBERS_OF_GYM;
 
+-------------------------------------------------------------
 
+--G. Triggers
+CREATE OR REPLACE TRIGGER trigger_after_insert_members
+AFTER INSERT ON MEMBERS_OF_GYM
+BEGIN
+dbms_output.put_line('New members inserted into MEMBERS_OF_GYM table.');
+END;
+/
+
+INSERT INTO MEMBERS_OF_GYM (MemberID, FullName, Email, PhoneNumber, DateOfBirth, SubscriptionID)
+VALUES (299, 'Test User Trigger2', 'triggeruser2@example.com', '1241268790', TO_DATE('1990-01-01', 'YYYY-MM-DD'), 101);
+
+---------------
+
+SELECT * FROM TRAINING_SESSION;
+
+CREATE OR REPLACE TRIGGER trigger_before_update_train_session
+BEFORE UPDATE ON TRAINING_SESSION
+DECLARE
+v_old_count NUMBER;
+BEGIN
+dbms_output.put_line('Updating TRAINING_SESSION records.');
+END;
+/
+
+INSERT INTO TRAINING_SESSION (TrainingSessionID, TrainingSessionName, TrainerID, Schedule) 
+VALUES (4, 'Morning yoga', 4, TO_TIMESTAMP('2025-06-12 10:30:00', 'YYYY-MM-DD HH24:MI:SS'));
+
+COMMIT;
+
+UPDATE TRAINING_SESSION
+SET TRAININGSESSIONNAME = 'Evening yoga'
+WHERE TRAININGSESSIONID = 4;
+
+-----------------
+--Row level
+
+CREATE OR REPLACE TRIGGER trigger_after_update_members
+AFTER UPDATE OF SUBSCRIPTIONID ON MEMBERS_OF_GYM
+FOR EACH ROW
+BEGIN
+dbms_output.put_line('Member ' || :OLD.FULLNAME || ' subscription changed from ' || :OLD.SUBSCRIPTIONID || ' to ' || :NEW.SUBSCRIPTIONID);
+END;
+/
+
+UPDATE MEMBERS_OF_GYM
+SET SUBSCRIPTIONID = 105
+WHERE MEMBERID = 1;
+
+--
+CREATE OR REPLACE TRIGGER trigger_after_update_email
+AFTER UPDATE OF EMAIL ON MEMBERS_OF_GYM
+FOR EACH ROW
+BEGIN
+DBMS_OUTPUT.PUT_LINE('Email for member ' || :OLD.FullName || ' changed from ' || :OLD.Email || ' to ' || :NEW.Email);
+END;
+/
+
+
+UPDATE MEMBERS_OF_GYM
+SET Email = 'new_email_from_trigger@example.com'
+WHERE MemberID = 1;
