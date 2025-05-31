@@ -1,5 +1,5 @@
 -- 1. Constructing the database tables
-
+SET SERVEROUTPUT ON;
 -- create the table subscription
 CREATE TABLE "SUBSCRIPTION" (
     SubscriptionID INT PRIMARY KEY,
@@ -298,6 +298,8 @@ FOR rec IN (SELECT EquipmentName FROM EQUIPMENT ORDER BY EquipmentID) LOOP
 i := i + 1;
 v_equipment(i) := rec.EquipmentName;
 END LOOP;
+END;
+/
 
 i := v_equipment.FIRST;
 WHILE i IS NOT NULL LOOP
@@ -307,7 +309,48 @@ END LOOP;
 END;
 /
 
--- mai trebuie sa fac cateva la C
+--index-by table
+DECLARE
+TYPE member_name_table IS TABLE OF VARCHAR2(100) INDEX BY PLS_INTEGER;
+v_names member_name_table;
+BEGIN
+v_names(1) := 'Liviu';
+v_names(2) := 'Mihnea';
+
+dbms_output.put_line('Member 1: ' || v_names(1));
+dbms_output.put_line('Member 2: ' || v_names(2));
+END;
+/
+
+--varray (variable size array)
+DECLARE
+TYPE member_name_var_array IS VARRAY(5) OF VARCHAR2(100);
+v_names member_name_var_array := member_name_var_array('John', 'Alice');
+BEGIN
+v_names.EXTEND;
+v_names(3) := 'Bob';
+FOR i IN 1 .. v_names.COUNT LOOP
+DBMS_OUTPUT.PUT_LINE('Member: ' || v_names(i));
+END LOOP;
+END;
+/
+
+--nested table (like a list but not fixed size, can grow as needed)
+DECLARE
+TYPE Member_id_table IS TABLE OF NUMBER;
+v_member_ids Member_id_table := Member_id_table();
+BEGIN
+v_member_ids.EXTEND(3);
+v_member_ids(1) := 101;
+v_member_ids(2) := 102;
+v_member_ids(3) := 103;
+
+FOR i IN 1 .. v_member_ids.COUNT LOOP
+DBMS_OUTPUT.PUT_LINE('Member ID: ' || v_member_ids(i));
+END LOOP;
+END;
+/
+
 
 -- D. Exception handling (minimum 3 implicit, 2 explicit).
 -- implicit
@@ -335,3 +378,268 @@ END;
 /
 
 -- explicit
+DECLARE
+v_trainer_id TRAINERS.TrainerID%TYPE := 100; -- invalid trainer ID
+v_name TRAINERS.FullName%TYPE;
+e_trainer_not_found EXCEPTION;
+BEGIN
+SELECT FullName INTO v_name
+FROM TRAINERS
+WHERE TrainerID = v_trainer_id;
+
+DBMS_OUTPUT.PUT_LINE('Trainer: ' || v_name);
+EXCEPTION
+WHEN NO_DATA_FOUND THEN
+DBMS_OUTPUT.PUT_LINE('Trainer with ID ' || v_trainer_id || ' not found.');
+END;
+/
+
+
+DECLARE
+v_subscription_duration SUBSCRIPTION.durationmonths%type := 12; --number of months that exceeds the max (12)
+BEGIN
+IF v_subscription_duration > 12 THEN
+RAISE_APPLICATION_ERROR(-20001, 'Subscription period cannot exceed one month');
+END IF;
+dbms_output.put_line('Valid subscription');
+END;
+/
+
+
+--------------------------------------
+-- E. cursors
+
+--explicit cursor
+DECLARE 
+CURSOR member_cursor IS SELECT fullname, email
+FROM members_of_gym;
+v_name members_of_gym.fullname%type;
+v_email members_of_gym.email%type;
+BEGIN
+OPEN member_cursor;
+LOOP
+FETCH member_cursor INTO v_name, v_email;
+EXIT WHEN member_cursor%NOTFOUND;
+dbms_output.put_line('Member: ' || v_name || '; ' || 'Member email: ' || v_email);
+END LOOP;
+END;
+/
+
+--implicit cursor with DELETE
+BEGIN
+  DELETE FROM MEMBERS_OF_GYM
+  WHERE SubscriptionID IS NULL;
+
+  DBMS_OUTPUT.PUT_LINE(SQL%ROWCOUNT || ' member(s) deleted.');
+END;
+/
+
+--explicit with paramteres
+DECLARE
+CURSOR c_subscription(p_cost NUMBER) IS
+SELECT FullName FROM MEMBERS_OF_GYM m
+JOIN SUBSCRIPTION s ON m.SubscriptionID = s.SubscriptionID
+WHERE s.Cost > p_cost;
+v_name MEMBERS_OF_GYM.FullName%TYPE;
+
+BEGIN
+OPEN c_subscription(50); -- Only members with plans costing more than 50
+LOOP
+FETCH c_subscription INTO v_name;
+EXIT WHEN c_subscription%NOTFOUND;
+DBMS_OUTPUT.PUT_LINE('Member: ' || v_name);
+END LOOP;
+CLOSE c_subscription;
+END;
+/
+
+--cursor update
+DECLARE
+CURSOR c IS
+SELECT MemberID, PhoneNumber FROM MEMBERS_OF_GYM
+WHERE SubscriptionID = 101
+FOR UPDATE;
+v_id MEMBERS_OF_GYM.MemberID%TYPE;
+v_phone MEMBERS_OF_GYM.PhoneNumber%TYPE;
+BEGIN
+OPEN c;
+LOOP
+FETCH c INTO v_id, v_phone;
+EXIT WHEN c%NOTFOUND;
+    
+UPDATE MEMBERS_OF_GYM
+SET PhoneNumber = '0000000000'
+WHERE CURRENT OF c;
+    
+DBMS_OUTPUT.PUT_LINE('Updated member ID: ' || v_id);
+END LOOP;
+CLOSE c;
+END;
+/
+SELECT * FROM members_of_gym;
+
+--------------------------------
+-- F.
+CREATE OR REPLACE PROCEDURE register_member(
+p_member_id IN MEMBERS_OF_GYM.memberid%type,
+p_full_name IN MEMBERS_OF_GYM.fullname%type,
+p_email IN MEMBERS_OF_GYM.email%type,
+p_phone_number IN MEMBERS_OF_GYM.phonenumber%type,
+p_date_of_birth IN MEMBERS_OF_GYM.dateofbirth%type,
+p_subscription_id IN MEMBERS_OF_GYM.subscriptionid%type,
+p_join_date IN MEMBERS_OF_GYM.join_date%type,
+p_address IN MEMBERS_OF_GYM.address%type
+)
+IS
+v_sub_exists NUMBER;
+v_member_exists NUMBER;
+BEGIN
+  -- Check if Subscription ID exists
+SELECT COUNT(*) INTO v_sub_exists
+FROM SUBSCRIPTION
+WHERE SubscriptionID = p_subscription_id;
+
+IF v_sub_exists = 0 THEN
+dbms_output.put_line('Invalid subscription ID: ' || p_subscription_id);
+RETURN; -- Stop the procedure if subscription ID is invalid
+END IF;
+
+-- Check if Member ID already exists
+SELECT COUNT(*) INTO v_member_exists
+FROM MEMBERS_OF_GYM
+WHERE memberid = p_member_id;
+
+IF v_member_exists > 0 THEN
+dbms_output.put_line('Member ID already exists: ' || p_member_id);
+RETURN; -- Stop the procedure if member ID is duplicate
+END IF;
+
+INSERT INTO MEMBERS_OF_GYM(
+memberid, fullname, email, phonenumber, dateofbirth, subscriptionid, join_date, address
+)
+VALUES(
+p_member_id, p_full_name, p_email, p_phone_number, p_date_of_birth, p_subscription_id, p_join_date, p_address
+);
+
+dbms_output.put_line('Member: ' || p_full_name || ' registered successfully!');
+EXCEPTION
+WHEN DUP_VAL_ON_INDEX THEN
+dbms_output.put_line('Member with same ID or email already exists!');
+WHEN OTHERS THEN
+dbms_output.put_line('Unexpected error: ' || SQLERRM);
+END;
+/
+
+
+BEGIN
+register_member(
+15,
+'Test Member duplicate',
+'test_member_duplicate@gmail.com',
+'0123456789',
+TO_DATE('2025-05-28', 'YYYY-MM-DD'),
+120,  -- existing SubscriptionID
+SYSDATE,
+'test street name.'
+);
+END;
+/
+
+BEGIN
+register_member(
+15,  -- now we try the same id again
+'Test Again',
+'anotheremail@gmail.com',
+'0770000000',
+TO_DATE('1995-01-01', 'YYYY-MM-DD'),
+101,
+SYSDATE,
+'Another street'
+);
+END;
+/
+
+
+SELECT * FROM MEMBERS_OF_GYM;
+
+--show member subscription by member id
+CREATE OR REPLACE PROCEDURE show_member_subscription(p_member_id MEMBERS_OF_GYM.MemberID%TYPE)
+IS
+v_name MEMBERS_OF_GYM.FULLNAME%TYPE;
+v_plan SUBSCRIPTION.PLANNAME%TYPE;
+v_cost SUBSCRIPTION.COST%TYPE;
+
+BEGIN
+SELECT m.FullName, s.PlanName, s.Cost
+INTO v_name, v_plan, v_cost
+FROM MEMBERS_OF_GYM m
+JOIN SUBSCRIPTION s on m.SubscriptionID = s.SubscriptionID
+WHERE m.MemberID = p_member_id;
+
+dbms_output.put_line('Member: ' || v_name);
+dbms_output.put_line('Subscription Plan: ' || v_plan);
+dbms_output.put_line('Cost: $' || v_cost);
+
+EXCEPTION
+WHEN NO_DATA_FOUND THEN
+dbms_output.put_line('No member found with ID: ' || p_member_id);
+END;
+/
+
+-- testing show_member_sbuscription with valid input
+BEGIN
+show_member_subscription(101);
+END;
+/
+
+
+CREATE OR REPLACE PROCEDURE count_members_by_plan(p_plan_name IN SUBSCRIPTION.PlanName%TYPE)
+IS
+v_count NUMBER;
+BEGIN
+SELECT COUNT(*) INTO v_count
+FROM MEMBERS_OF_GYM m
+JOIN SUBSCRIPTION s on m.SubscriptionID = s.SubscriptionID
+WHERE s.PlanName = p_plan_name;
+dbms_output.put_line('Number of members subscribed to ' || p_plan_name || ': ' || v_count);
+END;
+/
+
+SELECT DISTINCT PlanName FROM SUBSCRIPTION;
+
+BEGIN
+count_members_by_plan('Premium Plan');
+END;
+/
+
+-------------
+
+--function to calculate BMI
+CREATE OR REPLACE FUNCTION calculate_bmi(p_weight IN NUMBER, p_height IN NUMBER)
+RETURN NUMBER IS
+BEGIN
+RETURN ROUND(p_weight / (p_height * p_height), 2);
+END;
+/
+--testing
+SELECT calculate_bmi(80, 1.88) as bmi FROM DUAL;
+
+
+CREATE OR REPLACE FUNCTION get_member_age(p_member_id IN NUMBER)
+RETURN NUMBER IS
+    v_age NUMBER;
+BEGIN
+    SELECT FLOOR(MONTHS_BETWEEN(SYSDATE, dateofbirth) / 12)
+    INTO v_age
+    FROM MEMBERS_OF_GYM
+    WHERE memberid = p_member_id;
+
+    RETURN v_age;
+END;
+/
+
+SELECT get_member_age(1) AS age FROM DUAL;
+
+SELECT memberid, FULLNAME, dateofbirth FROM MEMBERS_OF_GYM;
+
+
